@@ -25,17 +25,14 @@ from gmail_client import Gmail, to_state
 
 JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 JEV_MODEL = "typesafe/jev-1.13"
-LABEL_PREFIX = "Jev"  # labels become Jev/Work, Jev/Finance, ...
-PROCESSED = "Jev-processed"
 # ponytail: thresholds tuned on one 50-email dry run; re-tune from printed raw numbers
 FOLDER_MIN = 0.7  # min Choice confidence to file, else Jev/Review
 REPLY_MIN = 0.6  # min Noul probability to star
 URGENT = 1.5  # Score 0..2: closer to "Today" than "This week"
 ARCHIVE = False  # True = also remove from Inbox
 MAX_EMAILS = 50
-QUERY = f"in:inbox -label:{PROCESSED}"
 
-# Keys become Gmail labels (Jev/<key>); no "/" in keys or Gmail nests them.
+# Keys are Gmail label names; no "/" in keys or Gmail nests them. "Personal" reuses yours.
 FOLDERS: dict[str, JSONContent] = {
     "Work": {
         "what": "My current job: projects, colleagues, meetings, work tools",
@@ -87,6 +84,8 @@ FOLDERS: dict[str, JSONContent] = {
     "Other": "None of the above clearly fits",
 }
 PRIORITY_LEVELS = ["Can wait", "This week", "Today"]
+# Skip emails that already carry any folder label: re-runs only sort new mail.
+QUERY = "in:inbox " + " ".join(f"-label:{name}" for name in [*FOLDERS, "Review"])
 
 QUESTIONS: dict[str, Choice | Noul | Score] = {
     "folder": Choice(instructions="Which folder does this email belong in?", criteria=FOLDERS),
@@ -163,7 +162,7 @@ def main(apply: bool) -> None:
 
         if not apply:
             continue
-        add = [gmail.label_id(f"{LABEL_PREFIX}/{d.folder}"), gmail.label_id(PROCESSED)]
+        add = [gmail.label_id(d.folder)]
         add += ["STARRED"] * d.needs_reply + ["IMPORTANT"] * d.urgent
         remove = ["INBOX"] if ARCHIVE and d.folder != "Review" else []
         gmail.modify(msg_id, add, remove)

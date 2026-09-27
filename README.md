@@ -5,7 +5,7 @@ For each email, Jev answers three questions; plain code decides what to do with 
 
 | Question                                                    | Type   | Used for                                            |
 | ----------------------------------------------------------- | ------ | --------------------------------------------------- |
-| Which folder? (see `FOLDERS`)                               | Choice | `Jev/<folder>` label, or `Jev/Review` if unsure     |
+| Which folder? (see `FOLDERS`)                               | Choice | `<folder>` label, or `Review` if unsure             |
 | Does the sender expect a reply?                             | Noul   | Star the email                                      |
 | How urgent? (Can wait, This week, Today)                    | Score  | Mark as Important                                   |
 
@@ -23,7 +23,8 @@ Flow per email:
 Gmail inbox -> to_state() -> Jev (3 questions) -> decide() -> labels
 ```
 
-- Only emails in the inbox **without** the `Jev-processed` label are fetched, so re-running is safe.
+- Only inbox emails without any folder label (`Work`, `Jobs`, …, `Review`) are fetched, so re-running is safe.
+  `Personal` reuses your existing Gmail label, so emails you tagged Personal by hand are skipped too.
 - `decide()` is a pure function: all thresholds live there, no network calls.
 
 ## Setup
@@ -72,7 +73,7 @@ Constants at the top of `gmail_jev_sorter.py`:
 
 | Setting        | Default   | Meaning                                                               |
 | -------------- | --------- | --------------------------------------------------------------------- |
-| `FOLDER_MIN`   | `0.7`     | Min folder confidence to file it (else `Jev/Review`)                  |
+| `FOLDER_MIN`   | `0.7`     | Min folder confidence to file it (else `Review`)                      |
 | `REPLY_MIN`    | `0.6`     | Min "needs reply" probability to star it                              |
 | `URGENT`       | `1.5`     | Priority score (0–2) at or above which it is marked Important         |
 | `ARCHIVE`      | `False`   | `True` also removes sorted emails from the Inbox (never for Review)   |
@@ -106,4 +107,4 @@ uv run pytest -x                                    # tests
 
 ## Undo
 
-Remove the `Jev-processed` label (and `Jev/*` labels) in Gmail to have emails re-sorted.
+Remove the folder labels (`Work`, `Jobs`, …, `Review`) from an email in Gmail to have it re-sorted.
