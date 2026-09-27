@@ -1,6 +1,6 @@
 # jev-gmail
 
-Sorts your Gmail inbox into labels using [Jev](https://docs.typesafe.ai) (TypeSafe).
+Sorts your Gmail inbox into labels using [Jev](https://docs.typesafe.ai) (TypeSafe), via OpenRouter.
 For each email, Jev answers three questions; plain code decides what to do with the answers.
 
 | Question                                                    | Type   | Used for                                            |
@@ -35,13 +35,14 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
    ```sh
    uv sync
    ```
-2. **TypeSafe API key**: create one at [https://console.typesafe.ai/](https://console.typesafe.ai/) and put it in `.env`:
+2. **OpenRouter API key**: Jev is called through OpenRouter's Decisions API
+   (`typesafe/jev-1.13`, about $0.00002 per email). Create a key at
+   [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) and put it in `.env`:
 
    ```sh
-   TYPESAFE_API_KEY=your-key
-   # optional
-   # TYPESAFE_DEFAULT_MODEL=jev-latest
+   OPENROUTER_API_KEY=sk-or-v1-...
    ```
+
 3. **Gmail credentials**: in [Google Cloud Console](https://console.cloud.google.com/):
 
    - Enable the **Gmail API**.

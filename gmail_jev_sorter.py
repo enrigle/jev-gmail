@@ -1,9 +1,9 @@
 """
-Sort Gmail inbox with Jev (TypeSafe).
+Sort Gmail inbox with Jev (TypeSafe), called through OpenRouter's Decisions API.
 
 Setup:
   uv sync
-  Fill TYPESAFE_API_KEY in .env
+  Fill OPENROUTER_API_KEY in .env
   Put credentials.json (OAuth "Desktop app" client, Gmail API enabled) next to this script.
 
 Run:
@@ -11,22 +11,20 @@ Run:
   uv run --env-file .env gmail_jev_sorter.py --apply    # applies labels
 """
 
+import json
+import os
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
+from typing import Any
 
-from typesafe_sdk import (
-    Choice,
-    ChoiceAnswer,
-    JSONContent,
-    Noul,
-    NoulAnswer,
-    Score,
-    ScoreAnswer,
-    TypeSafeClient,
-)
+from typesafe_sdk import Choice, JSONContent, Noul, Score
 
 from gmail_client import Gmail, to_state
 
+JEV_URL = "https://openrouter.ai/api/alpha/decisions"
+JEV_MODEL = "typesafe/jev-1.13"
 LABEL_PREFIX = "Jev"  # labels become Jev/Work, Jev/Finance, ...
 PROCESSED = "Jev-processed"
 # ponytail: thresholds tuned on one 50-email dry run; re-tune from printed raw numbers
@@ -119,33 +117,56 @@ def decide(folder: str, confidence: float, reply_p: float, priority: float) -> D
     )
 
 
+def ask_jev(key: str, state: dict[str, str]) -> dict[str, Any]:
+    """POST the questions to Jev via OpenRouter; return the raw `answers` dict.
+
+    Raw JSON, not the SDK's response model: OpenRouter's string score keys fail its validation.
+    """
+    body = {
+        "model": JEV_MODEL,
+        "state": state,
+        "questions": {k: q.model_dump(exclude_none=True) for k, q in QUESTIONS.items()},
+    }
+    req = urllib.request.Request(
+        JEV_URL,
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+    )
+    # ponytail: no retries; add backoff if 429/5xx show up in practice
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            answers: dict[str, Any] = json.load(resp)["answers"]
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"OpenRouter {e.code}: {e.read().decode(errors='ignore')}") from e
+    return answers
+
+
 def main(apply: bool) -> None:
     """Sort unprocessed inbox emails. Dry run prints only; `apply` writes labels."""
+    key = os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        raise SystemExit("Set OPENROUTER_API_KEY in .env (openrouter.ai/settings/keys)")
     gmail = Gmail()
     ids = gmail.list_ids(QUERY, MAX_EMAILS)
     print(f"{len(ids)} emails to sort ({'APPLY' if apply else 'DRY RUN'})\n")
 
-    with TypeSafeClient() as jev:
-        for msg_id in ids:
-            state = to_state(gmail.get(msg_id))
-            a = jev.system_one(state=state, questions=QUESTIONS).answers
-            folder, reply, prio = a["folder"], a["needs_reply"], a["priority"]
-            assert isinstance(folder, ChoiceAnswer)
-            assert isinstance(reply, NoulAnswer)
-            assert isinstance(prio, ScoreAnswer)
-            d = decide(folder.choice, folder.confidence, reply.noul, prio.score)
-            print(
-                f"[{d.folder:<11}] conf={folder.confidence:.2f} "
-                f"reply={d.needs_reply!s:<5}({reply.noul:.2f}) "
-                f"urgent={d.urgent!s:<5}({prio.score:.2f}) | {state['subject'][:60]}"
-            )
+    for msg_id in ids:
+        state = to_state(gmail.get(msg_id))
+        a = ask_jev(key, state)
+        folder, conf = a["folder"]["choice"], a["folder"]["confidence"]
+        reply_p, prio = a["needs_reply"]["noul"], a["priority"]["score"]
+        d = decide(folder, conf, reply_p, prio)
+        print(
+            f"[{d.folder:<11}] conf={conf:.2f} reply={d.needs_reply!s:<5}({reply_p:.2f}) "
+            f"urgent={d.urgent!s:<5}({prio:.2f}) | {state['subject'][:60]}"
+        )
 
-            if not apply:
-                continue
-            add = [gmail.label_id(f"{LABEL_PREFIX}/{d.folder}"), gmail.label_id(PROCESSED)]
-            add += ["STARRED"] * d.needs_reply + ["IMPORTANT"] * d.urgent
-            remove = ["INBOX"] if ARCHIVE and d.folder != "Review" else []
-            gmail.modify(msg_id, add, remove)
+        if not apply:
+            continue
+        add = [gmail.label_id(f"{LABEL_PREFIX}/{d.folder}"), gmail.label_id(PROCESSED)]
+        add += ["STARRED"] * d.needs_reply + ["IMPORTANT"] * d.urgent
+        remove = ["INBOX"] if ARCHIVE and d.folder != "Review" else []
+        gmail.modify(msg_id, add, remove)
 
 
 if __name__ == "__main__":
