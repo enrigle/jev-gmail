@@ -1,0 +1,108 @@
+# jev-gmail
+
+Sorts your Gmail inbox into labels using [Jev](https://docs.typesafe.ai) (TypeSafe).
+For each email, Jev answers three questions; plain code decides what to do with the answers.
+
+| Question                                                    | Type   | Used for                                            |
+| ----------------------------------------------------------- | ------ | --------------------------------------------------- |
+| Which folder? (see `FOLDERS`)                               | Choice | `Jev/<folder>` label, or `Jev/Review` if unsure     |
+| Does the sender expect a reply?                             | Noul   | Star the email                                      |
+| How urgent? (Can wait, This week, Today)                    | Score  | Mark as Important                                   |
+
+## Architecture
+
+```
+gmail_client.py      Gmail I/O: OAuth login, list/get messages, labels, email -> state
+gmail_jev_sorter.py  Questions, decide() rules, main loop, CLI
+test_sorter.py       Tests for decide() and to_state()
+```
+
+Flow per email:
+
+```
+Gmail inbox -> to_state() -> Jev (3 questions) -> decide() -> labels
+```
+
+- Only emails in the inbox **without** the `Jev-processed` label are fetched, so re-running is safe.
+- `decide()` is a pure function: all thresholds live there, no network calls.
+
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
+
+1. **Install dependencies**
+
+   ```sh
+   uv sync
+   ```
+2. **TypeSafe API key**: create one at [https://console.typesafe.ai/](https://console.typesafe.ai/) and put it in `.env`:
+
+   ```sh
+   TYPESAFE_API_KEY=your-key
+   # optional
+   # TYPESAFE_DEFAULT_MODEL=jev-latest
+   ```
+3. **Gmail credentials**: in [Google Cloud Console](https://console.cloud.google.com/):
+
+   - Enable the **Gmail API**.
+   - Configure the OAuth consent screen and add your Gmail address as a test user.
+   - Create an **OAuth client ID** of type **Desktop app**, download it as `credentials.json`
+     into this folder.
+
+   On the first run a browser opens to log in; the token is saved to `token.json`.
+
+`.env`, `credentials.json` and `token.json` are secrets and are git-ignored.
+
+## Run
+
+```sh
+# Dry run: prints what would happen, changes nothing
+uv run --env-file .env gmail_jev_sorter.py
+
+# Apply labels
+uv run --env-file .env gmail_jev_sorter.py --apply
+```
+
+Always dry-run first and check the decisions look right.
+
+## Configuration
+
+Constants at the top of `gmail_jev_sorter.py`:
+
+| Setting        | Default   | Meaning                                                               |
+| -------------- | --------- | --------------------------------------------------------------------- |
+| `FOLDER_MIN`   | `0.7`     | Min folder confidence to file it (else `Jev/Review`)                  |
+| `REPLY_MIN`    | `0.6`     | Min "needs reply" probability to star it                              |
+| `URGENT`       | `1.5`     | Priority score (0–2) at or above which it is marked Important         |
+| `ARCHIVE`      | `False`   | `True` also removes sorted emails from the Inbox (never for Review)   |
+| `MAX_EMAILS`   | `50`      | Emails per run (max 500)                                              |
+| `FOLDERS`      | 11        | Folders Jev chooses from (below)                                      |
+
+Folders: Work, Jobs, Finance, Shopping, Accounts, Kids, Courses, Language, Newsletters,
+Personal, Other.
+
+Thresholds are starting guesses. The dry run prints raw numbers next to each decision,
+e.g. `reply=False(0.42) urgent=False(0.80)`: tune from those.
+
+`FOLDERS` entries can be a string or `{"what": ..., "not_for": ..., "examples": [...]}`.
+Keys become Gmail labels; don't use `/` in them (Gmail nests labels on `/`).
+
+## Troubleshooting
+
+- **`Error 403: access_denied` / "app not verified"**: the Google app is in Testing mode.
+  Add your Gmail as a test user in Google Cloud Console → Google Auth Platform → Audience.
+  On the "Google hasn't verified this app" screen, click Continue. Don't publish the app.
+- **`invalid_grant` after a week**: Testing-mode tokens expire after 7 days.
+  Delete `token.json` and run again to log in.
+
+## Development
+
+```sh
+uv run ruff format . && uv run ruff check . --fix   # lint
+uv run mypy . --strict --exclude .venv              # types
+uv run pytest -x                                    # tests
+```
+
+## Undo
+
+Remove the `Jev-processed` label (and `Jev/*` labels) in Gmail to have emails re-sorted.

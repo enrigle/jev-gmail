@@ -1,0 +1,30 @@
+[project]
+name = "jev-gmail"
+version = "0.1.0"
+description = "Sort Gmail inbox with Jev (TypeSafe)"
+requires-python = ">=3.12"
+dependencies = [
+    "typesafe-sdk>=0.7.2",
+    "google-api-python-client>=2.200",
+    "google-auth-oauthlib>=1.4",
+]
+
+[dependency-groups]
+dev = ["pytest", "ruff", "mypy"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+
+[[tool.mypy.overrides]]
+# google libs ship no type stubs
+module = ["googleapiclient.*", "google_auth_oauthlib.*", "google.oauth2.*", "google.auth.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# google-auth has partial, untyped signatures
+module = ["gmail_client"]
+disallow_untyped_calls = false
+warn_return_any = false
