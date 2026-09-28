@@ -36,4 +36,4 @@ Remove the app at <https://myaccount.google.com/permissions> and delete `token.j
 
 ## Contact
 
-enrigle@gmail.com
+<enrigle@gmail.com>
