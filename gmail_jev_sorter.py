@@ -52,14 +52,14 @@ FOLDERS: dict[str, JSONContent] = {
     "Finance": {
         "what": "Bank, invoices, receipts, payments",
         "not_for": "Tax agency or traffic authority (use Tax)",
-        "examples": ["Fintonic", "BBVA account statement", "Receipt from a service"],
+        "examples": ["Fintonic", "Santander Informa", "unicaja", "Factura", "Recibo"],
     },
     "Tax": {
         "what": "Tax and government notices: tax returns, fines, official notifications",
         "examples": [
             "AEAT / Agencia Tributaria",
             "DGT / Dirección General de Tráfico",
-            "Renta declaration",
+            "Renta declaracion",
             "Multa de tráfico",
         ],
     },
@@ -82,7 +82,7 @@ FOLDERS: dict[str, JSONContent] = {
     },
     "Kids": {
         "what": "My children's school and activities",
-        "examples": ["School evaluation results", "Homework", "School holidays"],
+        "examples": ["ceip", "extraescolares"],
     },
     "Courses": {
         "what": "Online courses and learning platforms",
@@ -124,9 +124,13 @@ class Decision:
 
 
 def decide(folder: str, confidence: float, reply_p: float, priority: float) -> Decision:
-    """Turn Jev's raw judgments into actions. Pure: no I/O."""
+    """Turn Jev's raw judgments into actions. Pure: no I/O.
+
+    Unknown folders go to Review: the answer becomes a Gmail label name, and names like
+    "SPAM" would hit system labels. NaN compares False, so it lands on the safe side.
+    """
     return Decision(
-        folder=folder if confidence >= FOLDER_MIN else "Review",
+        folder=folder if folder in FOLDERS and confidence >= FOLDER_MIN else "Review",
         needs_reply=reply_p >= REPLY_MIN,
         urgent=priority >= URGENT,
     )
@@ -153,7 +157,7 @@ def ask_jev(key: str, state: dict[str, str]) -> dict[str, Any]:
                 answers: dict[str, Any] = json.load(resp)["answers"]
                 return answers
         except urllib.error.HTTPError as e:
-            msg = f"OpenRouter {e.code}: {e.read().decode(errors='ignore')}"
+            msg = f"OpenRouter {e.code}: {e.read(200).decode(errors='ignore')}"
             if (e.code != 429 and e.code < 500) or attempt == RETRIES:
                 raise SystemExit(msg) from e  # 4xx (bad key, no credit) won't fix itself
         except (urllib.error.URLError, TimeoutError) as e:
@@ -178,12 +182,18 @@ def main(apply: bool) -> None:
     for msg_id in ids:
         state = to_state(gmail.get(msg_id))
         a = ask_jev(key, state)
-        folder, conf = a["folder"]["choice"], a["folder"]["confidence"]
-        reply_p, prio = a["needs_reply"]["noul"], a["priority"]["score"]
+        try:
+            folder, conf = a["folder"]["choice"], a["folder"]["confidence"]
+            reply_p, prio = a["needs_reply"]["noul"], a["priority"]["score"]
+        except (KeyError, TypeError):
+            print(f"skip {msg_id}: incomplete answer from Jev (retried next run)")
+            continue
         d = decide(folder, conf, reply_p, prio)
+        # 4: subjects only in dry run; --apply output goes to the weekly log
+        what = state["subject"][:60] if not apply else msg_id
         print(
             f"[{d.folder:<11}] conf={conf:.2f} reply={d.needs_reply!s:<5}({reply_p:.2f}) "
-            f"urgent={d.urgent!s:<5}({prio:.2f}) | {state['subject'][:60]}"
+            f"urgent={d.urgent!s:<5}({prio:.2f}) | {what}"
         )
 
         if not apply:

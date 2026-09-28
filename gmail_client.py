@@ -29,6 +29,8 @@ class Gmail:
 
     def list_ids(self, query: str, limit: int) -> list[str]:
         """Return up to `limit` message IDs matching a Gmail search `query`."""
+        if limit <= 0:
+            return []
         # ponytail: single page (Gmail caps at 500), paginate if limit > 500
         res = self.svc.users().messages().list(userId="me", q=query, maxResults=limit).execute()
         return [m["id"] for m in res.get("messages", [])]
@@ -82,6 +84,8 @@ def _credentials() -> Credentials:
         creds = InstalledAppFlow.from_client_secrets_file(
             str(CREDENTIALS), SCOPES
         ).run_local_server(port=0)
+    TOKEN.touch(mode=0o600, exist_ok=True)
+    TOKEN.chmod(0o600)  # refresh token = mailbox access
     TOKEN.write_text(creds.to_json())
     return creds
 
@@ -101,5 +105,5 @@ def to_state(msg: Message, max_body: int = 1000) -> dict[str, str]:
     return {
         "from": headers.get("from", ""),
         "subject": headers.get("subject", ""),
-        "body": body[:max_body],
+        "body": body[: max(max_body, 0)],
     }

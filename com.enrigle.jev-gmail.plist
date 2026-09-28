@@ -19,15 +19,27 @@
     <key>WorkingDirectory</key>
     <string>/Users/enrigle/Documents/code/jev-gmail</string>
 
-    <!-- Sunday (0) at 21:00, local time. Evening: laptop usually awake.
-         Kept off the wallabump nights (Mon/Fri 22:25). If the Mac is asleep,
-         launchd runs it on next wake. -->
+    <!-- Sunday (0), Tuesday (2), Thursday (4) at 21:30, local time.
+         Evening: laptop usually awake. Kept off the wallabump nights
+         (Mon/Fri 22:25). If the Mac is asleep, launchd runs it on next wake. -->
     <key>StartCalendarInterval</key>
-    <dict>
-        <key>Weekday</key><integer>0</integer>
-        <key>Hour</key><integer>21</integer>
-        <key>Minute</key><integer>0</integer>
-    </dict>
+    <array>
+        <dict>
+            <key>Weekday</key><integer>0</integer>
+            <key>Hour</key><integer>21</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>2</integer>
+            <key>Hour</key><integer>21</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>4</integer>
+            <key>Hour</key><integer>21</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+    </array>
 
     <key>RunAtLoad</key>
     <false/>

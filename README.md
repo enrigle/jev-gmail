@@ -14,7 +14,7 @@ For each email, Jev answers three questions; plain code decides what to do with 
 ```
 gmail_client.py      Gmail I/O: OAuth login, list/get messages, labels, email -> state
 gmail_jev_sorter.py  Questions, decide() rules, main loop, CLI
-test_sorter.py       Tests for decide() and to_state()
+test_sorter.py       Tests for decide(), to_state() and ask_jev() retries
 ```
 
 Flow per email:
@@ -67,9 +67,9 @@ uv run --env-file .env gmail_jev_sorter.py --apply
 
 Always dry-run first and check the decisions look right.
 
-## Weekly background job (macOS)
+## Background job (macOS)
 
-`com.enrigle.jev-gmail.plist` runs `--apply` every Sunday at 21:00 via launchd
+`com.enrigle.jev-gmail.plist` runs `--apply` Sunday, Tuesday and Thursday at 21:30 via launchd
 (missed runs happen on next wake). Log: `~/Library/Logs/jev-gmail.log`.
 
 ```sh
@@ -97,7 +97,7 @@ Constants at the top of `gmail_jev_sorter.py`:
 | `REPLY_MIN`    | `0.6`     | Min "needs reply" probability to star it                              |
 | `URGENT`       | `1.5`     | Priority score (0–2) at or above which it is marked Important         |
 | `ARCHIVE`      | `False`   | `True` also removes sorted emails from the Inbox (never for Review)   |
-| `MAX_EMAILS`   | `50`      | Emails per run (max 500)                                              |
+| `MAX_EMAILS`   | `100`     | Emails per run (max 500)                                              |
 | `FOLDERS`      | 13        | Folders Jev chooses from (below)                                      |
 
 Folders: Work, Jobs, Finance, Tax, House, Shopping, Accounts, Kids, Courses, Language, Newsletters,

@@ -20,6 +20,14 @@ def test_decide() -> None:
     assert below == Decision("Review", False, False)
 
 
+def test_decide_rejects_unknown_folder_and_nan() -> None:
+    """Folder not in FOLDERS (e.g. a system label) or NaN confidence -> Review, no flags."""
+    assert decide("SPAM", 1.0, 0.0, 0.0).folder == "Review"
+    assert decide("", 1.0, 0.0, 0.0).folder == "Review"
+    nan = float("nan")
+    assert decide("Work", nan, nan, nan) == Decision("Review", False, False)
+
+
 def test_to_state_nested_and_empty() -> None:
     """Finds nested text/plain, skips HTML, falls back to snippet."""
     b64 = base64.urlsafe_b64encode(b"hello").decode()
@@ -37,6 +45,8 @@ def test_to_state_nested_and_empty() -> None:
     }
     assert to_state(msg) == {"from": "", "subject": "Hi", "body": "hello"}
     assert to_state({"payload": {}, "snippet": "snip"})["body"] == "snip"
+    assert to_state(msg, max_body=0)["body"] == ""
+    assert to_state(msg, max_body=-5)["body"] == ""
 
 
 def test_ask_jev_retries_5xx_not_4xx(monkeypatch: pytest.MonkeyPatch) -> None:
