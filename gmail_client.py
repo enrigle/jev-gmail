@@ -1,9 +1,11 @@
 """Gmail I/O: auth, labels, fetching messages."""
 
 import base64
+import sys
 from pathlib import Path
 from typing import Any
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -61,14 +63,20 @@ class Gmail:
 def _credentials() -> Credentials:
     """Load cached OAuth token, refresh it, or run browser login; saves token.json.
 
-    Raises SystemExit if a login is needed and credentials.json is missing.
+    Raises SystemExit if a login is needed but impossible: credentials.json missing,
+    or no terminal (background job) to complete the browser login.
     """
     creds = Credentials.from_authorized_user_file(str(TOKEN), SCOPES) if TOKEN.exists() else None
     if creds and creds.valid:
         return creds
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    else:
+        try:
+            creds.refresh(Request())
+        except RefreshError:  # e.g. Testing-mode token older than 7 days
+            creds = None
+    if not creds or not creds.valid:
+        if not sys.stdin.isatty():
+            raise SystemExit("Gmail login expired: run the script once in a terminal to log in")
         if not CREDENTIALS.exists():
             raise SystemExit(f"Missing {CREDENTIALS} (OAuth Desktop client, Gmail API enabled)")
         creds = InstalledAppFlow.from_client_secrets_file(

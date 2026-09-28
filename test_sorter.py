@@ -1,4 +1,10 @@
 import base64
+import io
+import urllib.error
+from email.message import Message
+from typing import Any
+
+import pytest
 
 from gmail_client import to_state
 from gmail_jev_sorter import FOLDER_MIN, REPLY_MIN, URGENT, Decision, decide
@@ -31,3 +37,32 @@ def test_to_state_nested_and_empty() -> None:
     }
     assert to_state(msg) == {"from": "", "subject": "Hi", "body": "hello"}
     assert to_state({"payload": {}, "snippet": "snip"})["body"] == "snip"
+
+
+def test_ask_jev_retries_5xx_not_4xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """520 then OK -> retried and answered; 401 -> exits at once without retry."""
+    import gmail_jev_sorter as s
+
+    def err(code: int) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError(s.JEV_URL, code, "x", Message(), io.BytesIO(b"boom"))
+
+    calls: list[int] = []
+    replies: list[Any] = [err(520), io.BytesIO(b'{"answers": {"ok": 1}}')]
+
+    def fake_urlopen(req: Any, timeout: float) -> Any:
+        calls.append(1)
+        r = replies.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    assert s.ask_jev("k", {}) == {"ok": 1}
+    assert len(calls) == 2
+
+    calls.clear()
+    replies[:] = [err(401)]
+    with pytest.raises(SystemExit, match="401"):
+        s.ask_jev("k", {})
+    assert len(calls) == 1

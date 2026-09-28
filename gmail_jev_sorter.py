@@ -14,6 +14,7 @@ Run:
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -25,12 +26,13 @@ from gmail_client import Gmail, to_state
 
 JEV_URL = "https://openrouter.ai/api/alpha/decisions"
 JEV_MODEL = "typesafe/jev-1.13"
+RETRIES = 4  # on 429/5xx/network errors, backoff 1,2,4,8s
 # ponytail: thresholds tuned on one 50-email dry run; re-tune from printed raw numbers
-FOLDER_MIN = 0.7  # min Choice confidence to file, else Jev/Review
+FOLDER_MIN = 0.7  # min Choice confidence to file, else Review
 REPLY_MIN = 0.6  # min Noul probability to star
 URGENT = 1.5  # Score 0..2: closer to "Today" than "This week"
 ARCHIVE = False  # True = also remove from Inbox
-MAX_EMAILS = 50
+MAX_EMAILS = 100
 
 # Keys are Gmail label names; no "/" in keys or Gmail nests them. "Personal" reuses yours.
 FOLDERS: dict[str, JSONContent] = {
@@ -48,8 +50,22 @@ FOLDERS: dict[str, JSONContent] = {
         ],
     },
     "Finance": {
-        "what": "Bank, invoices, receipts, taxes, payments",
+        "what": "Bank, invoices, receipts, payments",
+        "not_for": "Tax agency or traffic authority (use Tax)",
         "examples": ["Fintonic", "BBVA account statement", "Receipt from a service"],
+    },
+    "Tax": {
+        "what": "Tax and government notices: tax returns, fines, official notifications",
+        "examples": [
+            "AEAT / Agencia Tributaria",
+            "DGT / Dirección General de Tráfico",
+            "Renta declaration",
+            "Multa de tráfico",
+        ],
+    },
+    "House": {
+        "what": "Finding, buying, selling or renting a home",
+        "examples": ["Idealista alerts and messages", "Property listings", "Rental offers"],
     },
     "Shopping": {
         "what": "Orders, shipping, buying and selling on marketplaces",
@@ -131,13 +147,23 @@ def ask_jev(key: str, state: dict[str, str]) -> dict[str, Any]:
         data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
-    # ponytail: no retries; add backoff if 429/5xx show up in practice
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            answers: dict[str, Any] = json.load(resp)["answers"]
-    except urllib.error.HTTPError as e:
-        raise SystemExit(f"OpenRouter {e.code}: {e.read().decode(errors='ignore')}") from e
-    return answers
+    for attempt in range(RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                answers: dict[str, Any] = json.load(resp)["answers"]
+                return answers
+        except urllib.error.HTTPError as e:
+            msg = f"OpenRouter {e.code}: {e.read().decode(errors='ignore')}"
+            if (e.code != 429 and e.code < 500) or attempt == RETRIES:
+                raise SystemExit(msg) from e  # 4xx (bad key, no credit) won't fix itself
+        except (urllib.error.URLError, TimeoutError) as e:
+            msg = f"Network error: {e}"
+            if attempt == RETRIES:
+                raise SystemExit(msg) from e
+        wait = 2**attempt
+        print(f"  {msg.strip()[:80]} -> retry in {wait}s")
+        time.sleep(wait)
+    raise AssertionError("unreachable")
 
 
 def main(apply: bool) -> None:
