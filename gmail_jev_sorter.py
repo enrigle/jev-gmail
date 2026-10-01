@@ -47,6 +47,7 @@ FOLDERS: dict[str, JSONContent] = {
             "X busca personal para el puesto de...",
             "LinkedIn profile views",
             "Company viewed your application",
+            "Infojobs",
         ],
     },
     "Finance": {

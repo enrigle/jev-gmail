@@ -41,6 +41,13 @@
         </dict>
     </array>
 
+    <!-- Unbuffered output: the log fills live instead of only at exit. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
     <key>RunAtLoad</key>
     <false/>
 
