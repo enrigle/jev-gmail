@@ -15,6 +15,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 HERE = Path(__file__).parent
 CREDENTIALS = HERE / "credentials.json"
 TOKEN = HERE / "token.json"
+RETRIES = 3  # library retries timeouts, connection resets, 429/5xx with backoff
 
 Message = dict[str, Any]
 
@@ -32,18 +33,31 @@ class Gmail:
         if limit <= 0:
             return []
         # ponytail: single page (Gmail caps at 500), paginate if limit > 500
-        res = self.svc.users().messages().list(userId="me", q=query, maxResults=limit).execute()
+        res = (
+            self.svc.users()
+            .messages()
+            .list(userId="me", q=query, maxResults=limit)
+            .execute(num_retries=RETRIES)
+        )
         return [m["id"] for m in res.get("messages", [])]
 
     def get(self, msg_id: str) -> Message:
         """Fetch one full message (headers, MIME parts, snippet)."""
-        msg: Message = self.svc.users().messages().get(userId="me", id=msg_id).execute()
+        msg: Message = (
+            self.svc.users().messages().get(userId="me", id=msg_id).execute(num_retries=RETRIES)
+        )
         return msg
 
     def label_id(self, name: str) -> str:
         """Return the ID of label `name`, creating it if missing. Cached after first call."""
         if self._labels is None:
-            labels = self.svc.users().labels().list(userId="me").execute().get("labels", [])
+            labels = (
+                self.svc.users()
+                .labels()
+                .list(userId="me")
+                .execute(num_retries=RETRIES)
+                .get("labels", [])
+            )
             self._labels = {lbl["name"]: lbl["id"] for lbl in labels}
         if name not in self._labels:
             body = {
@@ -52,14 +66,19 @@ class Gmail:
                 "messageListVisibility": "show",
             }
             self._labels[name] = (
-                self.svc.users().labels().create(userId="me", body=body).execute()["id"]
+                self.svc.users()
+                .labels()
+                .create(userId="me", body=body)
+                .execute(num_retries=RETRIES)["id"]
             )
         return self._labels[name]
 
     def modify(self, msg_id: str, add: list[str], remove: list[str]) -> None:
         """Add and remove label IDs on one message."""
         body = {"addLabelIds": add, "removeLabelIds": remove}
-        self.svc.users().messages().modify(userId="me", id=msg_id, body=body).execute()
+        self.svc.users().messages().modify(userId="me", id=msg_id, body=body).execute(
+            num_retries=RETRIES
+        )
 
 
 def _credentials() -> Credentials:
