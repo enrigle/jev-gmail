@@ -8,6 +8,7 @@ For each email, Jev answers three questions; plain code decides what to do with 
 | Which folder? (see `FOLDERS`)                               | Choice | `<folder>` label, or `Review` if unsure             |
 | Does the sender expect a reply?                             | Noul   | Star the email                                      |
 | How urgent? (Can wait, This week, Today)                    | Score  | Mark as Important                                   |
+| Job search stage? (see `JOB_STAGES`)                        | Choice | `Jobs-<stage>` label, only for Jobs emails          |
 
 ## Architecture
 
@@ -66,6 +67,17 @@ uv run --env-file .env gmail_jev_sorter.py --apply
 ```
 
 Always dry-run first and check the decisions look right.
+
+### Job stages
+
+Emails filed under `Jobs` also get a stage label: `Jobs-Alert`, `Jobs-Outreach`, `Jobs-Applied`,
+`Jobs-Interview`, `Jobs-Rejected` or `Jobs-Offer` (none if Jev is unsure).
+To stage emails that were labeled `Jobs` before this existed (up to 500 per run):
+
+```sh
+uv run --env-file .env gmail_jev_sorter.py --jobs-backfill           # dry run
+uv run --env-file .env gmail_jev_sorter.py --jobs-backfill --apply
+```
 
 ## Background job (macOS)
 

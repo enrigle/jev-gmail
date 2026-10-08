@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from gmail_client import to_state
-from gmail_jev_sorter import FOLDER_MIN, REPLY_MIN, URGENT, Decision, decide
+from gmail_jev_sorter import FOLDER_MIN, REPLY_MIN, URGENT, Decision, decide, job_stage
 
 
 def test_decide() -> None:
@@ -26,6 +26,17 @@ def test_decide_rejects_unknown_folder_and_nan() -> None:
     assert decide("", 1.0, 0.0, 0.0).folder == "Review"
     nan = float("nan")
     assert decide("Work", nan, nan, nan) == Decision("Review", False, False)
+
+
+def test_job_stage() -> None:
+    """Stage label only for Jobs, known stages, confidence >= FOLDER_MIN."""
+    assert job_stage("Jobs", "Interview", FOLDER_MIN) == "Jobs-Interview"
+    assert job_stage("Jobs", "Interview", FOLDER_MIN - 0.01) == ""
+    assert job_stage("Work", "Interview", 1.0) == ""  # not a job email
+    assert job_stage("Jobs", "SPAM", 1.0) == ""  # unknown stage
+    assert job_stage("Jobs", "Offer", float("nan")) == ""
+    assert decide("Jobs", 0.9, 0.0, 0.0, "Offer", 0.9).stage == "Jobs-Offer"
+    assert decide("Jobs", 0.1, 0.0, 0.0, "Offer", 0.9).stage == ""  # Review, not Jobs
 
 
 def test_to_state_nested_and_empty() -> None:
