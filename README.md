@@ -81,7 +81,7 @@ uv run --env-file .env gmail_jev_sorter.py --jobs-backfill --apply
 
 ## Background job (macOS)
 
-`com.enrigle.jev-gmail.plist` runs `--apply` Sunday, Tuesday and Thursday at 21:30 via launchd
+`com.enrigle.jev-gmail.plist` runs `--apply` every other day (odd days of the month) at 21:30 via launchd
 (missed runs happen on next wake). Log: `~/Library/Logs/jev-gmail.log`.
 
 ```sh
