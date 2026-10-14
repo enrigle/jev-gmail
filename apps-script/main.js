@@ -37,27 +37,40 @@ function sortBatch_(limit) {
     console.log(ids.length + ' emails to sort');
     const labelId = labelCache_();
     for (const id of ids) {
-      const msg = Gmail.Users.Messages.get('me', id, { format: 'full' });
-      const p = parseAnswers(askJev_(key, toState(msg, decode_)));
-      if (!p) {
-        console.log('skip ' + id + ': no usable answer, retried next run');
-        continue;
+      try {
+        sortOne_(key, id, labelId);
+      } catch (e) {
+        if (e.isJevFail) throw e; // bad key or no credit: stop, Google emails the failure
+        console.log('error on ' + id + ', skipped: ' + e.message);
       }
-      const d = decide(p.folder, p.confidence, p.replyP, p.priority, p.stage, p.stageConf);
-      const l = labelsFor(d);
-      const add = l.names.map(labelId).concat(l.system);
-      Gmail.Users.Messages.modify({ addLabelIds: add, removeLabelIds: [] }, 'me', id);
-      console.log(
-        '[' + d.folder + '] ' + (d.stage || '-') + ' reply=' + d.needsReply +
-          ' urgent=' + d.urgent + ' | ' + id,
-      );
     }
   } finally {
     lock.releaseLock();
   }
 }
 
-/** POST the questions; return `answers`, or null to skip this email (retried next run). */
+/** Sort one email. An unusable Jev answer goes to Review, so it is not retried forever. */
+function sortOne_(key, id, labelId) {
+  const msg = Gmail.Users.Messages.get('me', id, { format: 'full' });
+  const answers = askJev_(key, toState(msg, decode_));
+  if (answers === null) return; // 429/5xx/network: still unlabeled, retried next run
+  const p = parseAnswers(answers);
+  const d = p
+    ? decide(p.folder, p.confidence, p.replyP, p.priority, p.stage, p.stageConf)
+    : decide('', 0, 0, 0, '', 0); // Review, no star, not important
+  const l = labelsFor(d);
+  const add = l.names.map(labelId).concat(l.system);
+  Gmail.Users.Messages.modify({ addLabelIds: add, removeLabelIds: [] }, 'me', id);
+  console.log(
+    '[' + d.folder + '] ' + (d.stage || '-') + ' reply=' + d.needsReply +
+      ' urgent=' + d.urgent + (p ? '' : ' (unusable answer)') + ' | ' + id,
+  );
+}
+
+/**
+ * POST the questions. Returns `answers`, `{}` when a 200 body is not JSON (goes to Review),
+ * or null to skip this email (429/5xx/network, retried next run). Other codes throw.
+ */
 function askJev_(key, state) {
   let resp;
   try {
@@ -79,32 +92,37 @@ function askJev_(key, state) {
     return null;
   }
   if (status === 'fail') {
-    throw new Error('OpenRouter ' + code + ': ' + resp.getContentText().slice(0, 200));
+    const err = new Error('OpenRouter ' + code); // no body text: it may echo the email
+    err.isJevFail = true;
+    throw err;
   }
   try {
-    return JSON.parse(resp.getContentText()).answers;
+    return JSON.parse(resp.getContentText()).answers || {};
   } catch (e) {
-    return null;
+    console.log('OpenRouter 200 with a body that is not JSON');
+    return {};
   }
 }
 
-/** Returns name -> label id; creates a label the first time it is needed. */
+/** Returns name -> label id; creates a label the first time it is needed.
+ * Gmail label names are case-insensitive, so "work" counts as "Work". */
 function labelCache_() {
   const byName = {};
   (Gmail.Users.Labels.list('me').labels || []).forEach(l => {
-    byName[l.name] = l.id;
+    byName[l.name.toLowerCase()] = l.id;
   });
   return name => {
-    if (!Object.prototype.hasOwnProperty.call(byName, name)) {
+    const k = name.toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(byName, k)) {
       const body = { name: name, labelListVisibility: 'labelShow', messageListVisibility: 'show' };
-      byName[name] = Gmail.Users.Labels.create(body, 'me').id;
+      byName[k] = Gmail.Users.Labels.create(body, 'me').id;
     }
-    return byName[name];
+    return byName[k];
   };
 }
 
 /** body.data -> UTF-8 text. The advanced service may give a base64url string or bytes. */
 function decode_(data) {
-  const bytes = Array.isArray(data) ? data : Utilities.base64DecodeWebSafe(data);
+  const bytes = typeof data === 'string' ? Utilities.base64DecodeWebSafe(data) : data;
   return Utilities.newBlob(bytes).getDataAsString('UTF-8');
 }
