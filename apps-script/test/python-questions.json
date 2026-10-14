@@ -1,0 +1,127 @@
+{
+  "folder": {
+    "type": "choice",
+    "instructions": "Which folder does this email belong in?",
+    "criteria": {
+      "Work": {
+        "what": "My current job: projects, colleagues, meetings, work tools",
+        "not_for": "Recruiting, job offers or applications (use Jobs)"
+      },
+      "Jobs": {
+        "what": "Recruiters, job alerts, job applications, interviews",
+        "examples": [
+          "Interview invitation",
+          "X busca personal para el puesto de...",
+          "LinkedIn profile views",
+          "Company viewed your application",
+          "Infojobs"
+        ]
+      },
+      "Finance": {
+        "what": "Bank, invoices, receipts, payments",
+        "not_for": "Tax agency or traffic authority (use Tax)",
+        "examples": [
+          "Fintonic",
+          "Santander Informa",
+          "unicaja",
+          "Factura",
+          "Recibo"
+        ]
+      },
+      "Tax": {
+        "what": "Tax and government notices: tax returns, fines, official notifications",
+        "examples": [
+          "AEAT / Agencia Tributaria",
+          "DGT / Dirección General de Tráfico",
+          "Renta declaracion",
+          "Multa de tráfico"
+        ]
+      },
+      "House": {
+        "what": "Finding, buying, selling or renting a home",
+        "examples": [
+          "Idealista alerts and messages",
+          "Property listings",
+          "Rental offers"
+        ]
+      },
+      "Shopping": {
+        "what": "Orders, shipping, buying and selling on marketplaces",
+        "examples": [
+          "Vinted",
+          "Wallapop",
+          "Amazon order",
+          "Shipping label"
+        ]
+      },
+      "Accounts": {
+        "what": "Account and security notices",
+        "examples": [
+          "Login or one-time code",
+          "You shared Google account data with an app",
+          "Security incident notice",
+          "Terms or legal changes"
+        ]
+      },
+      "Kids": {
+        "what": "My children's school and activities",
+        "examples": [
+          "ceip",
+          "extraescolares"
+        ]
+      },
+      "Courses": {
+        "what": "Online courses and learning platforms",
+        "examples": [
+          "Coursera",
+          "MITx",
+          "edX",
+          "Udemy",
+          "DeepLearning.AI"
+        ]
+      },
+      "Language": {
+        "what": "Language lessons and tutors",
+        "examples": [
+          "Preply"
+        ]
+      },
+      "Newsletters": {
+        "what": "Subscriptions, digests, articles, marketing, promotions",
+        "examples": [
+          "Medium",
+          "TLDR",
+          "New York Times",
+          "Real Python"
+        ]
+      },
+      "Personal": "Family, friends, personal appointments",
+      "Other": "None of the above clearly fits"
+    }
+  },
+  "needs_reply": {
+    "type": "noul",
+    "instructions": "Does the sender expect a personal reply from me?"
+  },
+  "priority": {
+    "type": "score",
+    "instructions": "How soon must I personally act on this email? Ignore marketing, sales or fundraising urgency.",
+    "criteria": [
+      "Can wait",
+      "This week",
+      "Today"
+    ]
+  },
+  "job_stage": {
+    "type": "choice",
+    "instructions": "If this email is about my job search, what stage is it?",
+    "criteria": {
+      "Alert": "Job alerts, job recommendations, profile views",
+      "Outreach": "A recruiter or company contacts me first about a role",
+      "Applied": "Confirmation that my application was received or viewed",
+      "Interview": "Interview invitation, scheduling, assessment or test",
+      "Rejected": "My application was declined",
+      "Offer": "Job offer or contract"
+    }
+  }
+}
