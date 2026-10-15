@@ -3,19 +3,18 @@
 Sorts your Gmail inbox into labels using [Jev](https://docs.typesafe.ai) (TypeSafe), via OpenRouter.
 For each email, Jev answers three questions; plain code decides what to do with the answers.
 
-| Question                                                    | Type   | Used for                                            |
-| ----------------------------------------------------------- | ------ | --------------------------------------------------- |
-| Which folder? (see `FOLDERS`)                               | Choice | `<folder>` label, or `Review` if unsure             |
-| Does the sender expect a reply?                             | Noul   | Star the email                                      |
-| How urgent? (Can wait, This week, Today)                    | Score  | Mark as Important                                   |
-| Job search stage? (see `JOB_STAGES`)                        | Choice | `Jobs-<stage>` label, only for Jobs emails          |
+| Question                                 | Type   | Used for                                            |
+| ---------------------------------------- | ------ | --------------------------------------------------- |
+| Which folder? (see`FOLDERS`)           | Choice | `Jev/<folder>` label, or `Jev/Review` if unsure |
+| Does the sender expect a reply?          | Noul   | Star the email                                      |
+| How urgent? (Can wait, This week, Today) | Score  | Mark as Important                                   |
 
 ## Architecture
 
 ```
 gmail_client.py      Gmail I/O: OAuth login, list/get messages, labels, email -> state
 gmail_jev_sorter.py  Questions, decide() rules, main loop, CLI
-test_sorter.py       Tests for decide(), to_state() and ask_jev() retries
+test_sorter.py       Tests for decide() and to_state()
 ```
 
 Flow per email:
@@ -24,8 +23,7 @@ Flow per email:
 Gmail inbox -> to_state() -> Jev (3 questions) -> decide() -> labels
 ```
 
-- Only inbox emails without any folder label (`Work`, `Jobs`, …, `Review`) are fetched, so re-running is safe.
-  `Personal` reuses your existing Gmail label, so emails you tagged Personal by hand are skipped too.
+- Only emails in the inbox **without** the `Jev-processed` label are fetched, so re-running is safe.
 - `decide()` is a pure function: all thresholds live there, no network calls.
 
 ## Setup
@@ -44,7 +42,6 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
    ```sh
    OPENROUTER_API_KEY=sk-or-v1-...
    ```
-
 3. **Gmail credentials**: in [Google Cloud Console](https://console.cloud.google.com/):
 
    - Enable the **Gmail API**.
@@ -68,51 +65,20 @@ uv run --env-file .env gmail_jev_sorter.py --apply
 
 Always dry-run first and check the decisions look right.
 
-### Job stages
-
-Emails filed under `Jobs` also get a stage label: `Jobs-Alert`, `Jobs-Outreach`, `Jobs-Applied`,
-`Jobs-Interview`, `Jobs-Rejected` or `Jobs-Offer` (none if Jev is unsure).
-To stage emails that were labeled `Jobs` before this existed (up to 500 per run):
-
-```sh
-uv run --env-file .env gmail_jev_sorter.py --jobs-backfill           # dry run
-uv run --env-file .env gmail_jev_sorter.py --jobs-backfill --apply
-```
-
-## Background job (macOS)
-
-`com.enrigle.jev-gmail.plist` runs `--apply` every other day (odd days of the month) at 21:30 via launchd
-(missed runs happen on next wake). Log: `~/Library/Logs/jev-gmail.log`.
-
-```sh
-# install / reload after editing the plist
-cp com.enrigle.jev-gmail.plist ~/Library/LaunchAgents/
-launchctl bootout gui/$(id -u)/com.enrigle.jev-gmail 2>/dev/null
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.enrigle.jev-gmail.plist
-
-launchctl kickstart gui/$(id -u)/com.enrigle.jev-gmail   # run now
-tail -f ~/Library/Logs/jev-gmail.log                     # watch
-launchctl bootout gui/$(id -u)/com.enrigle.jev-gmail     # uninstall
-```
-
-The job can't open a browser: if the Gmail login expired it exits with
-"Gmail login expired" in the log. Run the script once in a terminal to log in again.
-Publish the Google app to **In production** so the login stops expiring every 7 days.
-
 ## Configuration
 
 Constants at the top of `gmail_jev_sorter.py`:
 
 | Setting        | Default   | Meaning                                                               |
 | -------------- | --------- | --------------------------------------------------------------------- |
-| `FOLDER_MIN`   | `0.7`     | Min folder confidence to file it (else `Review`)                      |
-| `REPLY_MIN`    | `0.6`     | Min "needs reply" probability to star it                              |
-| `URGENT`       | `1.5`     | Priority score (0–2) at or above which it is marked Important         |
-| `ARCHIVE`      | `False`   | `True` also removes sorted emails from the Inbox (never for Review)   |
-| `MAX_EMAILS`   | `100`     | Emails per run (max 500)                                              |
-| `FOLDERS`      | 13        | Folders Jev chooses from (below)                                      |
+| `FOLDER_MIN` | `0.7`   | Min folder confidence to file it (else`Jev/Review`)                 |
+| `REPLY_MIN`  | `0.6`   | Min "needs reply" probability to star it                              |
+| `URGENT`     | `1.5`   | Priority score (0–2) at or above which it is marked Important        |
+| `ARCHIVE`    | `False` | `True` also removes sorted emails from the Inbox (never for Review) |
+| `MAX_EMAILS` | `50`    | Emails per run (max 500)                                              |
+| `FOLDERS`    | 11        | Folders Jev chooses from (below)                                      |
 
-Folders: Work, Jobs, Finance, Tax, House, Shopping, Accounts, Kids, Courses, Language, Newsletters,
+Folders: Work, Jobs, Finance, Shopping, Accounts, Kids, Courses, Language, Newsletters,
 Personal, Other.
 
 Thresholds are starting guesses. The dry run prints raw numbers next to each decision,
@@ -125,11 +91,9 @@ Keys become Gmail labels; don't use `/` in them (Gmail nests labels on `/`).
 
 - **`Error 403: access_denied` / "app not verified"**: the Google app is in Testing mode.
   Add your Gmail as a test user in Google Cloud Console → Google Auth Platform → Audience.
-  On the "Google hasn't verified this app" screen, click Continue.
+  On the "Google hasn't verified this app" screen, click Continue. Don't publish the app.
 - **`invalid_grant` after a week**: Testing-mode tokens expire after 7 days.
-  Delete `token.json` and run again to log in. To stop this (needed for the weekly job),
-  Google Auth Platform → Audience → **Publish app**. For a personal app you can skip
-  verification; you keep seeing the "unverified app" screen at login.
+  Delete `token.json` and run again to log in.
 
 ## Development
 
@@ -141,4 +105,4 @@ uv run pytest -x                                    # tests
 
 ## Undo
 
-Remove the folder labels (`Work`, `Jobs`, …, `Review`) from an email in Gmail to have it re-sorted.
+Remove the `Jev-processed` label (and `Jev/*` labels) in Gmail to have emails re-sorted.
