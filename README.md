@@ -65,6 +65,25 @@ uv run --env-file .env gmail_jev_sorter.py --apply
 
 Always dry-run first and check the decisions look right.
 
+## Apps Script (runs every 5 minutes in Google)
+
+The live sorter is `apps-script/`, deployed with [clasp](https://github.com/google/clasp).
+It labels up to 20 unsorted inbox emails every 5 minutes, also while your computer is off.
+
+One-time setup:
+
+1. `npx -y @google/clasp login`, and enable the Apps Script API at
+   https://script.google.com/home/usersettings
+2. `cd apps-script && npx @google/clasp push --force`
+3. Editor → Project Settings → Script Properties: add `OPENROUTER_API_KEY`.
+4. Run `runOnce` once (approve permissions), check the log and Gmail, then run `installTrigger`.
+
+Logs: editor → Executions. Stop: editor → Triggers → delete the `run` trigger.
+Tests: `node --test apps-script/*.test.js`.
+
+The Python script stays for local dry runs and `--jobs-backfill`; rule changes go in
+`apps-script/rules.js` (the Python copy is not kept in sync).
+
 ## Configuration
 
 Constants at the top of `gmail_jev_sorter.py`:

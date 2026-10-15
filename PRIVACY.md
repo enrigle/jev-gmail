@@ -21,12 +21,14 @@ to [OpenRouter](https://openrouter.ai/privacy), which forwards them to
 Their handling of that data is governed by their own privacy policies.
 No data is sent anywhere else.
 
+The sorter runs in Google Apps Script under the owner's Google account. Run logs in
+Apps Script hold message ids and the chosen labels, not email content.
+
 ## What is stored
 
-Only on the owner's computer:
-
-- `token.json`: the Google login token,
-- `~/Library/Logs/jev-gmail.log`: a run log with email subjects and the chosen labels.
+- `token.json` (owner's computer, for local runs): the Google login token,
+- Apps Script execution logs (in the owner's Google account): message ids and labels,
+- the OpenRouter key, in the Apps Script project's Script Properties.
 
 No database, analytics or third-party storage.
 
